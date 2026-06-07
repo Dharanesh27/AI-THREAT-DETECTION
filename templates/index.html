@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Weapon Detection Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+        }
+        h1, h2, h3 {
+            color: #ffffff;
+        }
+        .camera-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 20px;
+        }
+        .camera-feed {
+            background-color: #333;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            transition: transform 0.2s ease-in-out;
+            text-align: center;
+        }
+        .camera-feed.alert-active {
+            border: 2px solid red;
+            box-shadow: 0 0 10px red;
+        }
+        .camera-feed:hover {
+            transform: scale(1.05);
+        }
+        .camera-feed img {
+            width: 100%;
+            height: auto;
+            border: 2px solid #555;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .single-camera .camera-feed {
+            margin: 0 auto;
+        }
+        .single-camera .camera-feed img {
+            width: 640px;
+            height: 480px;
+            max-width: 100%;
+        }
+        .not-working {
+            color: red;
+            font-weight: bold;
+            display: none;
+            margin-top: 10px;
+        }
+        #alerts {
+            margin-top: 20px;
+            background-color: #222;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .alert {
+            background-color: #444;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+        }
+        .alert.new-alert {
+            background-color: #ffcccc;
+        }
+        .alert img {
+            width: 200px;
+            margin-top: 5px;
+            border: 1px solid #666;
+            border-radius: 3px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+        }
+        .modal-content {
+            margin: 10% auto;
+            display: block;
+            width: 50%;
+            max-width: 800px;
+        }
+        .close {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            color: white;
+            font-size: 40px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Weapon Detection Dashboard</h1>
+    <div class="camera-grid" id="cameraGrid">
+        {% if camera_indices %}
+            {% for cam_id in camera_indices %}
+            <div class="camera-feed" data-cam-id="{{ cam_id }}">
+                <h3>Camera {{ cam_id }}</h3>
+                <img src="/stream/{{ cam_id }}" alt="Camera {{ cam_id }}" onclick="expandFeed('{{ cam_id }}')">
+                <div class="not-working">This camera is not working</div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p>No working cameras available.</p>
+        {% endif %}
+    </div>
+    <div id="alerts">
+        <h2>Recent Alerts</h2>
+    </div>
+    <!-- Modal for expanded feed -->
+    <div id="feedModal" class="modal">
+        <span class="close" onclick="closeModal()">×</span>
+        <img class="modal-content" id="expandedFeed">
+    </div>
+    <script>
+        let previousAlerts = [];
+
+        // Expand camera feed
+        function expandFeed(camId) {
+            const modal = document.getElementById('feedModal');
+            const expandedFeed = document.getElementById('expandedFeed');
+            expandedFeed.src = `/stream/${camId}`;
+            modal.style.display = 'block';
+        }
+
+        // Close the modal
+        function closeModal() {
+            document.getElementById('feedModal').style.display = 'none';
+        }
+
+        // Check camera status and adjust layout
+        function checkCameraStatus() {
+            const cameraFeeds = document.querySelectorAll('.camera-feed');
+            const grid = document.getElementById('cameraGrid');
+            let workingCameras = 0;
+            const totalCameras = cameraFeeds.length;
+
+            if (totalCameras === 0) {
+                grid.innerHTML = '<p>No working cameras available.</p>';
+                grid.classList.remove('single-camera');
+                return;
+            }
+
+            let completedChecks = 0;
+
+            cameraFeeds.forEach(camElement => {
+                const camId = camElement.getAttribute('data-cam-id');
+                const img = camElement.querySelector('img');
+                const notWorkingDiv = camElement.querySelector('.not-working');
+
+                // Reset visibility for re-evaluation
+                img.style.display = 'block';
+                notWorkingDiv.style.display = 'none';
+
+                // Test stream availability
+                const testImg = new Image();
+                testImg.src = `/stream/${camId}?t=${new Date().getTime()}`; // Cache-busting timestamp
+
+                testImg.onload = () => {
+                    workingCameras++;
+                    img.src = testImg.src; // Update main img to reflect working stream
+                    img.style.display = 'block';
+                    notWorkingDiv.style.display = 'none';
+                    completedChecks++;
+                    if (completedChecks === totalCameras) adjustLayout(workingCameras, totalCameras);
+                };
+
+                testImg.onerror = () => {
+                    img.style.display = 'none';
+                    notWorkingDiv.style.display = 'block';
+                    completedChecks++;
+                    if (completedChecks === totalCameras) adjustLayout(workingCameras, totalCameras);
+                };
+            });
+        }
+
+        // Adjust layout based on working cameras
+        function adjustLayout(workingCount, totalCount) {
+            const grid = document.getElementById('cameraGrid');
+            if (workingCount === 0) {
+                grid.classList.remove('single-camera');
+                grid.style.textAlign = 'left';
+            } else if (workingCount === 1 && totalCount === 1) {
+                grid.classList.add('single-camera');
+                grid.style.textAlign = 'center';
+            } else {
+                grid.classList.remove('single-camera');
+                grid.style.textAlign = 'left';
+            }
+        }
+
+        // Update alerts
+        function updateAlerts() {
+            fetch('/alerts')
+                .then(response => response.json())
+                .then(data => {
+                    let alertsDiv = document.getElementById('alerts');
+                    alertsDiv.innerHTML = '<h2>Recent Alerts</h2>';
+                    data.forEach(alert => {
+                        let typeText = {
+                            'weapon': 'Weapon Detected',
+                            'fully_blocked': 'Camera Fully Blocked',
+                            'partially_blocked': 'Camera Partially Blocked'
+                        }[alert.type] || 'Unknown Alert';
+                        let alertText = `Camera ${alert.cam_id}: ${typeText} at ${new Date(alert.timestamp * 1000).toLocaleString()}`;
+                        let snapshotImg = alert.snapshot_path ? `<br><img src="/snapshots/${alert.snapshot_path}" alt="Snapshot">` : '';
+                        let alertDiv = document.createElement('div');
+                        alertDiv.className = 'alert';
+                        alertDiv.innerHTML = `${alertText}${snapshotImg}`;
+                        alertsDiv.appendChild(alertDiv);
+                    });
+
+                    const newAlerts = data.filter(alert => !previousAlerts.some(prev => prev.timestamp === alert.timestamp));
+                    newAlerts.forEach(alert => {
+                        const camFeed = document.querySelector(`.camera-feed[data-cam-id="${alert.cam_id}"]`);
+                        if (camFeed) {
+                            camFeed.classList.add('alert-active');
+                            setTimeout(() => {
+                                camFeed.classList.remove('alert-active');
+                            }, 5000);
+                        }
+                        const alertElements = alertsDiv.querySelectorAll('.alert');
+                        alertElements.forEach(el => {
+                            if (el.innerHTML.includes(alertText)) {
+                                el.classList.add('new-alert');
+                                setTimeout(() => {
+                                    el.classList.remove('new-alert');
+                                }, 5000);
+                            }
+                        });
+                    });
+                    previousAlerts = data;
+                })
+                .catch(error => console.error('Error fetching alerts:', error));
+        }
+
+        // Initial setup and periodic checks
+        window.onload = () => {
+            checkCameraStatus();
+            setInterval(updateAlerts, 5000);
+            updateAlerts();
+            setInterval(checkCameraStatus, 10000); // Recheck every 10 seconds
+        };
+    </script>
+</body>
+</html>

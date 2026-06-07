@@ -1,0 +1,5 @@
+.env
+alert_log.txt
+snapshots/
+__pycache__/
+*.pyc
