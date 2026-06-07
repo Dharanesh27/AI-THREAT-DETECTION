@@ -106,6 +106,11 @@ The system will:
 * Face recognition support
 * Database-backed incident management
 * Advanced threat classification
+  
+## 🎥 Demo Video
+
+Watch the project demo here:
+🔗 https://drive.google.com/file/d/1xCag4eqAUZ9lCQ5n_C86QDyxCvlwNAS4/view?usp=drive_link
 
 ## License
 
